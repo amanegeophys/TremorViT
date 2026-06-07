@@ -43,7 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dataset_dir",
         default=None,
-        help="Output dataset directory. Default: project_config.catalog.dataset_dir.",
+        help="Output dataset directory. Default: dataset_ssd/{project_name}.",
     )
     parser.add_argument(
         "--station_file",
@@ -63,6 +63,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--chunksize", type=int, default=50_000)
     parser.add_argument("--max_workers", type=int, default=None)
+    parser.add_argument("--win_sec", type=float, default=60.0)
+    parser.add_argument("--jitter_sec", type=float, default=20.0)
     return parser.parse_args()
 
 
@@ -79,7 +81,7 @@ def main() -> None:
     dataset_dir = (
         resolve_path(args.dataset_dir)
         if args.dataset_dir is not None
-        else resolve_path(project_cfg.catalog.dataset_dir)
+        else ROOT / "dataset_ssd" / project_name
     )
     station_file = (
         resolve_path(args.station_file)
@@ -90,8 +92,8 @@ def main() -> None:
     log_dir = ROOT / "logs" / project_name
     logger = create_logger(log_dir / "make_waveform_dataset.log")
 
-    win_sec = float(project_cfg.catalog.win_sec)
-    jitter_sec = float(project_cfg.catalog.jitter_sec)
+    win_sec = float(args.win_sec)
+    jitter_sec = float(args.jitter_sec)
     fs = int(project_cfg.waveform.sampling_rate)
     long_sec = win_sec + 2.0 * jitter_sec
     expected_len = int(round(long_sec * fs))
