@@ -1,0 +1,10 @@
+{
+  "tremor_detector": {
+    "path": "models/tremor_detector_v1.keras",
+    "backend": "torch",
+    "input_shape": [52, 52, 3],
+    "num_classes": 3,
+    "max_workers": 10,
+    "device": "auto"
+  }
+}

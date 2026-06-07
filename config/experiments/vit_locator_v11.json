@@ -1,0 +1,43 @@
+{
+    "experiment_name": "vit_locator_v11",
+    "data": {
+        "dataset_dir": "dataset_ssd/version1.0",
+        "train_name": "train",
+        "val_name": "val",
+        "input_components": ["EW", "NS", "UD"],
+        "normalization_type": "mean_std",
+        "scale_km": 50.0,
+        "fs": 100.0,
+        "win_sec": 60.0,
+        "jitter_sec": 20.0,
+        "arrival_time": false
+    },
+    "model": {
+        "input_length": 6000,
+        "patch_size": 60,
+        "stride": 30,
+        "position_emb_type": "learnable",
+        "emb_dim": 256,
+        "depth": 15,
+        "num_heads": 8,
+        "dropout_rate": 0.1,
+        "feedforward_dim": 256,
+        "hypo_num_output": 9,
+        "arrival_num_output": 0,
+        "mlp_type": "MixFFN"
+    },
+    "train": {
+        "batch_size": 64,
+        "num_epochs": 500,
+        "learning_rate": 4e-4,
+        "early_stopping_patience": 10,
+        "loss_function": "gaussian",
+        "lambda_arrival": 0,
+        "seed": 7,
+        "device": "cuda"
+    },
+    "output": {
+        "save_dir": "models/version1.0/vit_locator_v11",
+        "save_best_only": true
+    }
+}

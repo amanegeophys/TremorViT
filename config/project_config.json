@@ -1,0 +1,52 @@
+{
+    "base" : {
+        "project_name": "version1.0",
+        "base_catalog": "Mizuno_and_Ide"
+    },
+    "waveform": {
+        "freqmin_for_detector": 2,
+        "freqmax_for_detector": 8,
+        "sampling_rate": 100,
+        "duration_sec": 59.990000
+    },
+    "spectrogram": {
+        "fft_window_sec": 5.0,
+        "overlap_rate": 0.762,
+        "freqmin": 0,
+        "freqmax": 10,
+        "normalize_type": "mean_std"
+    },
+    "sac": {
+        "component_channels": {
+            "EW": "E",
+            "NS": "N",
+            "UD": "U"
+        },
+        "year_to_path": {
+            "2008": "/net/remie/mnt/sde/sac/2008",
+            "2009": "/net/remie/mnt/sde/sac/2009",
+            "2010": "/net/synology/volume1/Main/sac/2010",
+            "2011": "/net/synology/volume1/Main/sac/2011",
+            "2012": "/net/synology/volume1/Main/sac/2012",
+            "2013": "/net/remie/mnt/sdd/sac/2013",
+            "2014": "/net/remie/mnt/sdd/sac/2014",
+            "2015": "/net/pekora/mnt/sda/sac/2015",
+            "2016": "/net/pekora/mnt/sda/sac/2016"
+        }
+    },
+    "catalog": {
+        "dataset_dir": "dataset_ssd/version1.0",
+        "win_sec": 60.0,
+        "prob_threshold": 0.9,
+        "max_distance_km": 50,
+        "min_val_count": 0,
+        "min_test_count": 80,
+        "min_total_count": 600,
+        "start_year": 2008,
+        "end_year": 2016,
+        "train": [2008, 2009, 2010, 2011, 2012, 2013, 2014],
+        "val": [2015],
+        "test": [2016],
+        "jitter_sec": 20.0
+    }
+}

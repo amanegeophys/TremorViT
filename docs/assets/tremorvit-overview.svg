@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="360" viewBox="0 0 980 360" role="img" aria-labelledby="title desc">
+  <title id="title">TremorViT icon</title>
+  <desc id="desc">A TremorViT logo icon combining seismic waveforms, transformer patches, and a hypocenter marker.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06131f"/>
+      <stop offset="0.52" stop-color="#0d2a2a"/>
+      <stop offset="1" stop-color="#1d2f1f"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#67e8f9"/>
+      <stop offset="0.48" stop-color="#86efac"/>
+      <stop offset="1" stop-color="#fde047"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#67e8f9"/>
+      <stop offset="0.55" stop-color="#86efac"/>
+      <stop offset="1" stop-color="#fde047"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="20" stdDeviation="18" flood-color="#000000" flood-opacity="0.34"/>
+    </filter>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <style>
+      .wordmark { font: 850 62px Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; fill: #f8fafc; letter-spacing: 0; }
+      .tagline { font: 520 20px Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; fill: #cbd5e1; letter-spacing: 0; }
+    </style>
+  </defs>
+
+  <rect width="980" height="360" rx="42" fill="url(#bg)"/>
+  <path d="M0 286 C146 226 229 330 355 267 C498 196 571 154 704 187 C824 216 890 138 980 112 L980 360 L0 360 Z" fill="#0f766e" opacity="0.18"/>
+
+  <g transform="translate(94 54)" filter="url(#shadow)">
+    <circle cx="126" cy="126" r="111" fill="#081826" stroke="url(#ring)" stroke-width="9"/>
+    <circle cx="126" cy="126" r="83" fill="#0c2229" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>
+
+    <g opacity="0.45">
+      <rect x="82" y="62" width="28" height="28" rx="6" fill="#67e8f9"/>
+      <rect x="116" y="62" width="28" height="28" rx="6" fill="#86efac"/>
+      <rect x="150" y="62" width="28" height="28" rx="6" fill="#fde047"/>
+      <rect x="82" y="96" width="28" height="28" rx="6" fill="#86efac"/>
+      <rect x="116" y="96" width="28" height="28" rx="6" fill="#fde047"/>
+      <rect x="150" y="96" width="28" height="28" rx="6" fill="#67e8f9"/>
+      <rect x="82" y="130" width="28" height="28" rx="6" fill="#fde047"/>
+      <rect x="116" y="130" width="28" height="28" rx="6" fill="#67e8f9"/>
+      <rect x="150" y="130" width="28" height="28" rx="6" fill="#86efac"/>
+    </g>
+
+    <path d="M37 139 C53 105 66 105 82 139 C98 173 111 173 127 139 C143 105 156 105 172 139 C188 173 201 173 217 139" fill="none" stroke="url(#wave)" stroke-width="9" stroke-linecap="round" filter="url(#glow)"/>
+    <path d="M126 126 L178 77" stroke="#e2e8f0" stroke-width="5" stroke-linecap="round" opacity="0.84"/>
+    <circle cx="126" cy="126" r="17" fill="#f8fafc"/>
+    <circle cx="126" cy="126" r="7" fill="#0f766e"/>
+    <circle cx="178" cy="77" r="10" fill="#fde047" stroke="#fff7ed" stroke-width="3"/>
+
+    <path d="M82 192 H170" stroke="#94a3b8" stroke-width="4" stroke-linecap="round" opacity="0.55"/>
+    <path d="M98 208 H154" stroke="#94a3b8" stroke-width="4" stroke-linecap="round" opacity="0.36"/>
+  </g>
+
+  <g transform="translate(336 121)">
+    <text x="0" y="0" class="wordmark">TremorViT</text>
+    <text x="3" y="42" class="tagline">Transformer-based tremor hypocenter inference</text>
+    <rect x="4" y="70" width="372" height="8" rx="4" fill="url(#wave)"/>
+  </g>
+</svg>

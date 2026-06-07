@@ -1,0 +1,23 @@
+[project]
+name = "tremormonolocator"
+version = "0.1.0"
+description = "Tremor detector and hypocenter locator inference tools."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "einops>=0.8.1",
+    "h5py>=3.15.1",
+    "networkx>=3.4.0",
+    "numpy>=1.26,<2.0",
+    "obspy>=1.4.2",
+    "pandas>=2.3.3",
+    "pyproj>=3.7.2",
+    "python-dateutil>=2.9.0.post0",
+    "scipy>=1.14.0",
+    "tensorflow==2.17.0",
+    "torch==2.5.1",
+    "tqdm>=4.67.1",
+]
+
+[tool.uv]
+package = false
