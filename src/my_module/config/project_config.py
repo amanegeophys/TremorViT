@@ -8,7 +8,6 @@ class BaseConfig:
     """Project-level base settings."""
 
     project_name: str
-    base_catalog: str
 
 
 @dataclass
@@ -41,25 +40,6 @@ class SacConfig:
 
 
 @dataclass
-class CatalogConfig:
-    """Catalog construction and split settings."""
-
-    dataset_dir: str
-    win_sec: float
-    prob_threshold: float
-    max_distance_km: float
-    min_val_count: int
-    min_test_count: int
-    min_total_count: int
-    start_year: int
-    end_year: int
-    train: list | float
-    val: list | float
-    test: list | float
-    jitter_sec: int
-
-
-@dataclass
 class ProjectConfig:
     """Complete project configuration.
 
@@ -71,15 +51,12 @@ class ProjectConfig:
         Waveform processing settings.
     spectrogram : SpectrogramConfig
         Spectrogram generation settings.
-    catalog : CatalogConfig
-        Catalog construction settings.
     """
 
     base: BaseConfig
     waveform: WaveformConfig
     spectrogram: SpectrogramConfig
     sac: SacConfig
-    catalog: CatalogConfig
 
     @classmethod
     def from_file(cls, path: str | Path) -> "ProjectConfig":
@@ -111,6 +88,4 @@ class ProjectConfig:
             },
             component_channels=dict(sac_raw["component_channels"]),
         )
-        cg = CatalogConfig(**raw["catalog"])
-
-        return cls(base=bs, waveform=wf, spectrogram=sg, sac=sac, catalog=cg)
+        return cls(base=bs, waveform=wf, spectrogram=sg, sac=sac)
