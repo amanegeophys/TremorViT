@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environments and local tooling
+.venv/
+.env
+.env.*
+
+# Runtime outputs
+logs/
+reports/*
+!reports/sample/
+!reports/sample/**
+
+# Local data and machine-specific paths
+dataset_ssd/
+config/sac_root_map.local.json
+
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/
+.codex
+.agents
