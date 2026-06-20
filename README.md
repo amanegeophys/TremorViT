@@ -331,6 +331,11 @@ in `config/experiments/vit_locator_v11.json`:
 If you use this code, model weights, or sample catalog in a publication, please
 cite the TremorViT paper.
 
+Sugii, A., and Hiramatsu, Y. Single station seismic observations
+enable high resolution localization of tectonic tremor sources using a vision
+transformer. *Scientific Reports* (2026).
+[https://doi.org/10.1038/s41598-026-58641-5](https://doi.org/10.1038/s41598-026-58641-5)
+
 ```bibtex
 @article{tremorvit,
   title   = {Single station seismic observations enable high resolution localization of tectonic tremor sources using a vision transformer},
