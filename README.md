@@ -331,15 +331,12 @@ in `config/experiments/vit_locator_v11.json`:
 If you use this code, model weights, or sample catalog in a publication, please
 cite the TremorViT paper.
 
-> Manuscript under review at *Scientific Reports*. DOI and final bibliographic
-> information will be added after publication.
-
 ```bibtex
 @article{tremorvit,
-  title   = {TremorViT: High-resolution tectonic tremor source localization using a single-station vision transformer},
+  title   = {Single station seismic observations enable high resolution localization of tectonic tremor sources using a vision transformer},
   author  = {Author, Amane Sugii, Yoshihiro Hiramatsu},
   journal = {Scientific Reports},
-  year    = {YYYY},
-  doi     = {DOI}
+  year    = {2026},
+  doi     = {https://doi.org/10.1038/s41598-026-58641-5}
 }
 ```
