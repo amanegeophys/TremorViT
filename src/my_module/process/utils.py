@@ -29,11 +29,27 @@ def make_detector_specs(
         Spectrogram batch and sorted timestamps, or ``None`` and an empty list
         when no spectrograms can be generated.
     """
-    specs_map: dict[datetime, NDArray[np.float64]] = {}
-    for tr, ts in zip(minute_slices, val_times):
-        sp = detector_spec_generator.generate_spectrograms(tr, normalize=True)
-        if sp is not None:
-            specs_map[ts] = sp
+    specs_map: dict[datetime, NDArray[np.float32]] = {}
+    complete_items = [
+        (ts, tr)
+        for tr, ts in zip(minute_slices, val_times)
+        if all(
+            tr.get(component) is not None
+            for component in detector_spec_generator.components
+        )
+    ]
+
+    if complete_items:
+        keys, traces = zip(*sorted(complete_items, key=lambda item: item[0]))
+        batch_result = detector_spec_generator.generate_spectrogram_batch(
+            traces,
+            normalize=True,
+        )
+        if batch_result is not None:
+            batch_specs, valid_mask = batch_result
+            for ts, spec, is_valid in zip(keys, batch_specs, valid_mask):
+                if is_valid:
+                    specs_map[ts] = spec
 
     if not specs_map:
         return None, []
