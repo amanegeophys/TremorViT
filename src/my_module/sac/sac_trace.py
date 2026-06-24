@@ -9,7 +9,6 @@ import obspy
 from obspy import Stream, Trace, UTCDateTime
 from obspy.signal import filter as obspy_filter
 from obspy.signal.invsim import cosine_taper
-from scipy import signal
 
 T = TypeVar("T", bound="SacTrace")
 
@@ -194,7 +193,6 @@ class SacTrace:
                 ]
             )
 
-        data = signal.detrend(data, type="linear")
         data = data - np.mean(data)
         if taper_max_percentage > 0:
             if taper_type != "cosine":
