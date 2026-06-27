@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/tremorvit-overview.svg" alt="TremorViT overview" width="560"/>
+  <img src="docs/assets/tremorvit-overview.png" alt="TremorViT overview" width="560"/>
 </p>
 
 <h1 align="center">TremorViT</h1>
