@@ -5,7 +5,7 @@
 <h1 align="center">TremorViT</h1>
 
 <p align="center">
-  Single-station vision-transformer hypocenter localization for tectonic tremor.
+  <em>Single-station vision-transformer hypocenter localization for tectonic tremor.</em>
 </p>
 
 <p align="center">
@@ -21,16 +21,16 @@ estimates hypocenters with pretrained deep learning models.
 
 The pipeline has three stages:
 
-- **Tremor detection**: three-component SAC waveforms are filtered, split into
-  one-minute windows, converted to spectrograms, and classified by the CNN
-  detector.
-- **Single-station localization**: each detected station-minute is converted
-  into an `EW/NS/UD` waveform tensor and passed to a ViT locator that predicts
-  relative east, north, and depth offsets.
-- **Hypocenter fusion**: station-wise predictions are grouped with k-core logic
-  and fused with covariance intersection into final hypocenter estimates.
+| Stage | Role |
+| --- | --- |
+| **Tremor detection** | Three-component SAC waveforms are filtered, split into one-minute windows, converted to spectrograms, and classified by the CNN detector. |
+| **Single-station localization** | Each detected station-minute is converted into an `EW/NS/UD` waveform tensor and passed to a ViT locator that predicts relative east, north, and depth offsets. |
+| **Hypocenter fusion** | Station-wise predictions are grouped with k-core logic and fused with covariance intersection into final hypocenter estimates. |
 
 ## Repository Layout
+
+<details open>
+<summary>Project tree</summary>
 
 ```text
 TremorViT/
@@ -68,6 +68,8 @@ TremorViT/
 `-- README.md
 ```
 
+</details>
+
 ## SAC Input Layout
 
 Waveform SAC files are not included because they are large and
@@ -80,11 +82,11 @@ machine-specific. `SacHandler` reads hourly files named:
 where `{component}` is configured by `sac.component_channels`. For example,
 the model-facing keys can map to SAC channel suffixes like this:
 
-```text
-EW -> E channel
-NS -> N channel
-UD -> U channel
-```
+| Model-facing key | SAC channel suffix |
+| --- | --- |
+| `EW` | `E` channel |
+| `NS` | `N` channel |
+| `UD` | `U` channel |
 
 Both `sac.component_channels` and `sac.year_to_path` must be set in
 `config/project_config.json`. Each `sac.year_to_path` value must point to a year
@@ -147,16 +149,13 @@ uv run python scripts/predict_hypocenter_turbo.py \
   --device auto
 ```
 
-Common arguments:
-
-- `--start_time`, `--end_time`: processing range in
-  `YYYY-mm-dd-HH:MM:SS.ffffff` format.
-- `--station_file`: station metadata file. The default is
-  `data/version1.0/station/hinet_used.txt`.
-- `--output_dir`: per-station prediction directory. The default is
-  `reports/version1.0/hypocenter/org`.
-- `--device`: `auto`, `cpu`, `cuda`, or `cuda:<index>`.
-- `--n_producers`: number of parallel waveform producer threads.
+| Argument | Description |
+| --- | --- |
+| `--start_time`, `--end_time` | Processing range in `YYYY-mm-dd-HH:MM:SS.ffffff` format. |
+| `--station_file` | Station metadata file. The default is `data/version1.0/station/hinet_used.txt`. |
+| `--output_dir` | Per-station prediction directory. The default is `reports/version1.0/hypocenter/org`. |
+| `--device` | `auto`, `cpu`, `cuda`, or `cuda:<index>`. |
+| `--n_producers` | Number of parallel waveform producer threads. |
 
 Per-station predictions are written to:
 
@@ -178,13 +177,16 @@ Fusion outputs are written as:
 
 ```text
 reports/version1.0/hypocenter/fused_{start}_{end}.csv
-reports/version1.0/hypocenter/fused_removed_{start}_{end}.csv
+reports/version1.0/hypocenter/fused_isolated_removed_{start}_{end}.csv
 ```
 
 ## Building Locator Datasets
 
 `scripts/make_waveform_dataset.py` creates the CSV/HDF5 layout used by
 fine-tuning and evaluation. Prepare split catalogs like this:
+
+<details open>
+<summary>Input catalog layout</summary>
 
 ```text
 data/version1.0/catalog/
@@ -193,11 +195,15 @@ data/version1.0/catalog/
 `-- tremor_catalog_test.csv
 ```
 
+</details>
+
 Each input catalog must contain:
 
-- `start_time_for_trainlocator`: waveform window start time.
-- `lat`, `lon`, `dep`: event latitude, longitude, and depth.
-- `station`: station code used to read SAC waveforms.
+| Column | Description |
+| --- | --- |
+| `start_time_for_trainlocator` | Waveform window start time. |
+| `lat`, `lon`, `dep` | Event latitude, longitude, and depth. |
+| `station` | Station code used to read SAC waveforms. |
 
 Build datasets:
 
@@ -211,6 +217,9 @@ uv run python scripts/make_waveform_dataset.py \
 
 Output layout:
 
+<details open>
+<summary>Dataset output layout</summary>
+
 ```text
 dataset_ssd/version1.0/
 |-- train.csv
@@ -222,11 +231,15 @@ dataset_ssd/version1.0/
     `-- test.h5
 ```
 
+</details>
+
 Each HDF5 file contains:
 
-- `waveforms`: `(N, 3, win_sec * fs + 2 * jitter_sec * fs)`.
-- `east_km`, `north_km`, `depth_km`: station-relative target offsets.
-- `sta_lat`, `sta_lon`: station coordinates.
+| Dataset | Description |
+| --- | --- |
+| `waveforms` | `(N, 3, win_sec * fs + 2 * jitter_sec * fs)`. |
+| `east_km`, `north_km`, `depth_km` | Station-relative target offsets. |
+| `sta_lat`, `sta_lon` | Station coordinates. |
 
 ## Fine-Tuning
 
@@ -289,21 +302,21 @@ reports/version1.0/evaluate/locator_metrics_{exp}_{target}.json
 
 The fused hypocenter catalog contains:
 
-- `origin_time`: estimated tremor origin time.
-- `lat`, `lon`, `dep`: fused hypocenter latitude, longitude, and depth.
-- `stations`: semicolon-separated station codes used for the fused source.
-- `n_in_comp`: number of station predictions in the selected k-core component.
-- `sigma11` ... `sigma33`: 3 x 3 fused covariance matrix in local east, north,
-  and depth coordinates.
-- `volume_km3`: 95% confidence ellipsoid volume.
-- `major_length_km`: full length of the 95% confidence ellipsoid major axis.
-- `source_id`: zero-based source index when multiple sources are retained for
-  one origin time.
+| Column | Description |
+| --- | --- |
+| `origin_time` | Estimated tremor origin time. |
+| `lat`, `lon`, `dep` | Fused hypocenter latitude, longitude, and depth. |
+| `stations` | Semicolon-separated station codes used for the fused source. |
+| `n_in_comp` | Number of station predictions in the selected k-core component. |
+| `sigma11` ... `sigma33` | 3 x 3 fused covariance matrix in local east, north, and depth coordinates. |
+| `volume_km3` | 95% confidence ellipsoid volume. |
+| `major_length_km` | Full length of the 95% confidence ellipsoid major axis. |
+| `source_id` | Zero-based source index when multiple sources are retained for one origin time. |
 
 A ready-made sample is included:
 
 ```text
-reports/sample/fused_removed_2016-01-01-00:00:00.000_2016-09-30-23:59:59.000.csv
+reports/sample/fused_isolated_removed_2016-01-01-00:00:00.000_2016-09-30-23:59:59.000.csv
 ```
 
 Use it to inspect the final output format without running the full SAC waveform

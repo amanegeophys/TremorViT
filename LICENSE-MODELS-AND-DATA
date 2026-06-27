@@ -1,0 +1,24 @@
+Creative Commons Attribution 4.0 International Public License
+
+Copyright (c) 2026 Amane Sugii
+
+The pretrained model weights and sample catalog included in this repository
+are licensed under the Creative Commons Attribution 4.0 International License
+(CC BY 4.0), unless otherwise noted.
+
+This applies to:
+
+- models/tremor_detector_v1.keras
+- models/version1.0/vit_locator_v11/best_weight.pth
+- reports/sample/
+- data/version1.0/station/hinet_used.txt
+
+You are free to share and adapt these materials for any purpose, including
+commercial use, provided that appropriate credit is given, a link to the
+license is provided, and changes are indicated.
+
+License summary:
+https://creativecommons.org/licenses/by/4.0/
+
+Full legal code:
+https://creativecommons.org/licenses/by/4.0/legalcode

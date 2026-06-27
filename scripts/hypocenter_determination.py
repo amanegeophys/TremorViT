@@ -656,7 +656,7 @@ def main() -> None:
     out_df = pd.DataFrame(out_rows)
 
     out_path = out_dir / f"fused_{fmt_dt(start)}_{fmt_dt(end)}.csv"
-    out_path2 = out_dir / f"fused_removed_{fmt_dt(start)}_{fmt_dt(end)}.csv"
+    out_path2 = out_dir / f"fused_isolated_removed_{fmt_dt(start)}_{fmt_dt(end)}.csv"
 
     out_df.to_csv(out_path, index=False)
 
