@@ -55,6 +55,32 @@ def convert_arrival_time(
     return pred_arrival_mean, pred_arrival_std
 
 
+def relative_to_geographic(
+    east_km: np.ndarray | float,
+    north_km: np.ndarray | float,
+    station_lon: np.ndarray | float,
+    station_lat: np.ndarray | float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Invert the surface geodesic E/N coordinates used by the training labels.
+
+    Parameters
+    ----------
+    east_km, north_km : np.ndarray or float
+        Surface geodesic east and north coordinates in kilometers.
+    station_lon, station_lat : np.ndarray or float
+        Station longitude and latitude in degrees.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Source longitude and latitude in degrees.
+    """
+    distance_m = np.hypot(east_km, north_km) * 1000.0
+    azimuth_deg = np.rad2deg(np.arctan2(east_km, north_km))
+    lon, lat, _ = geod.fwd(station_lon, station_lat, azimuth_deg, distance_m)
+    return np.asarray(lon), np.asarray(lat)
+
+
 def convert_relative_to_geo(
     prediction: np.ndarray,
     station_loc: tuple[float, float],
@@ -110,16 +136,48 @@ def convert_relative_to_geo(
 
     station_lat, station_lon = station_loc
 
-    dist_m = float(np.hypot(east_km, north_km) * 1000.0)
-    azimuth_deg = float(np.degrees(np.arctan2(east_km, north_km)))
-
-    event_lon, event_lat, _ = geod.fwd(
-        station_lon,
-        station_lat,
-        azimuth_deg,
-        dist_m,
+    event_lon, event_lat = relative_to_geographic(
+        east_km, north_km, station_lon, station_lat,
     )
 
     pred_hypo = np.array([event_lat, event_lon, depth_km], dtype=float)
 
     return pred_hypo, mean_km, Sigma_km2
+
+
+def covariance_at_epicenter(
+    mean_km: np.ndarray,
+    covariance_km2: np.ndarray,
+    station_loc: tuple[float, float],
+) -> np.ndarray:
+    """Linearize station geodesic E/N(/depth) covariance at the predicted epicenter.
+
+    ``station_loc`` is (latitude, longitude). Input and output use km²;
+    depth remains positive downward. This is a direct first-order transform
+    for plotting, not a change to the stored prediction or CI calculation.
+    """
+    mean_km = np.asarray(mean_km, dtype=float)
+    covariance_km2 = np.asarray(covariance_km2, dtype=float)
+    if covariance_km2.shape not in ((2, 2), (3, 3)):
+        raise ValueError("Expected covariance shape (2, 2) or (3, 3)")
+    station_lat, station_lon = station_loc
+    center_lon, center_lat = relative_to_geographic(
+        mean_km[0], mean_km[1], station_lon, station_lat,
+    )
+    # Central differences over 1 m, directly into epicenter-centered E/N km.
+    step_km = 1e-3
+    offsets = mean_km[:2] + step_km * np.array([[1., 0.], [-1., 0.], [0., 1.], [0., -1.]])
+    lon, lat = relative_to_geographic(
+        offsets[:, 0], offsets[:, 1], np.full(4, station_lon), np.full(4, station_lat),
+    )
+    azimuth, _, distance_m = geod.inv(
+        np.full(4, center_lon), np.full(4, center_lat), lon, lat,
+    )
+    azimuth = np.deg2rad(azimuth)
+    local_km = (np.asarray(distance_m) / 1000.)[:, None] * np.column_stack(
+        (np.sin(azimuth), np.cos(azimuth)),
+    )
+    jacobian = np.eye(covariance_km2.shape[0])
+    jacobian[:2, :2] = ((local_km[::2] - local_km[1::2]) / (2 * step_km)).T
+    covariance = jacobian @ covariance_km2 @ jacobian.T
+    return 0.5 * (covariance + covariance.T)

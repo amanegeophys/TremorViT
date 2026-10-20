@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "src"))
 
 
+from my_module.output_utils import check_output_paths
 from my_module.prediction import (
     ci_fuse_scipy,
     compute_uncertainty,
@@ -264,7 +265,9 @@ def remove_isolated(
         )
         dist = dist_m / 1000.0
 
-        has_neighbor = np.any((dist < dist_km) & (dist > 0.0))
+        neighbors = dist < dist_km
+        neighbors[i - lo] = False
+        has_neighbor = np.any(neighbors)
         if has_neighbor:
             keep_idx.append(int(out.loc[i, "index"]))
 
@@ -326,11 +329,17 @@ def main() -> None:
         type=str,
         default="reports/hypocenter",
     )
-    parser.add_argument("--uncertainty_thr", type=float, default=7281 * 2)
-    parser.add_argument("--uncertainty_mode", type=str, default="volume")
+    parser.add_argument(
+        "--uncertainty_thr", type=float, default=7281 * 2,
+        help="Maximum single-station 95%% uncertainty volume in km^3.",
+    )
+    parser.add_argument("--uncertainty_mode", choices=["volume"], default="volume")
     parser.add_argument("--epicentral_train_max_km", type=float, default=50.0)
     parser.add_argument("--tremor_proba_thr", type=float, default=0.9)
     parser.add_argument("--k", type=int, default=2)
+    parser.add_argument(
+        "--overwrite", action="store_true", help="Allow replacing existing fused catalogs."
+    )
     args = parser.parse_args()
 
     start = parse_dt(args.start)
@@ -338,6 +347,9 @@ def main() -> None:
 
     org_dir = Path(args.org_dir)
     out_dir = Path(args.out_dir)
+    out_path = out_dir / f"fused_{fmt_dt(start)}_{fmt_dt(end)}.csv"
+    out_path2 = out_dir / f"fused_isolated_removed_{fmt_dt(start)}_{fmt_dt(end)}.csv"
+    check_output_paths([out_path, out_path2], overwrite=args.overwrite)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     usecols = [
@@ -408,10 +420,7 @@ def main() -> None:
     pdf["volume_km3"] = volume_km3
     pdf["major_length_km"] = major_length_km
 
-    if args.uncertainty_mode == "volume":
-        pdf = pdf[pdf["volume_km3"] <= args.uncertainty_thr]
-    elif args.uncertainty_mode == "length":
-        pdf = pdf[pdf["major_length_km"] <= args.uncertainty_thr]
+    pdf = pdf[pdf["volume_km3"] <= args.uncertainty_thr]
 
     pdf = pdf[pdf["tremor_proba"] >= args.tremor_proba_thr]
     pdf = pdf.sort_values("origin_time")
@@ -615,21 +624,15 @@ def main() -> None:
                 selected_by = "independent_50km"
 
             else:
-                if args.uncertainty_mode == "volume":
-                    selected = min(
-                        group_candidates,
-                        key=lambda cand: (
-                            cand["volume_km3"],
-                            -cand["n_in_comp"],
-                            cand["n_other_cluster_stations_within_50km"],
-                        ),
-                    )
-                    selected_by = "conflict_min_volume"
-
-                else:
-                    raise ValueError(
-                        f"Unknown conflict_resolve_mode: {args.uncertainty_mode}"
-                    )
+                selected = min(
+                    group_candidates,
+                    key=lambda cand: (
+                        cand["volume_km3"],
+                        -cand["n_in_comp"],
+                        cand["n_other_cluster_stations_within_50km"],
+                    ),
+                )
+                selected_by = "conflict_min_volume"
 
             selected["row"]["n_candidates"] = int(n_cand)
             selected["row"]["n_selected_sources"] = None
@@ -653,15 +656,11 @@ def main() -> None:
 
         out_rows.extend([cand["row"] for cand in selected_candidates])
 
-    out_df = pd.DataFrame(out_rows)
-
-    out_path = out_dir / f"fused_{fmt_dt(start)}_{fmt_dt(end)}.csv"
-    out_path2 = out_dir / f"fused_isolated_removed_{fmt_dt(start)}_{fmt_dt(end)}.csv"
-
-    out_df.to_csv(out_path, index=False)
-
+    out_df = pd.DataFrame(out_rows, columns=list(FusedRow.__annotations__))
     out_df2 = remove_isolated(out_df, geod)
-    out_df2.to_csv(out_path2, index=False)
+    output_mode = "w" if args.overwrite else "x"
+    out_df.to_csv(out_path, index=False, mode=output_mode)
+    out_df2.to_csv(out_path2, index=False, mode=output_mode)
 
     print(f"[saved] {out_path}")
     print("groups:", n_groups)

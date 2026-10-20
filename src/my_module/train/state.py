@@ -55,7 +55,6 @@ def configure_trainable_parameters(model: nn.Module, mode: str) -> None:
             token = getattr(model, name, None)
             if token is not None:
                 token.requires_grad = True
-        return
     elif mode == "no-patch-embedding":
         modules = [model.transformer, model.positional_encoding, model.hypo_mlp_heads]
         if getattr(model, "arrival_time", False):

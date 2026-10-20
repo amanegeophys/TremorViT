@@ -4,6 +4,8 @@ from numpy.typing import ArrayLike, NDArray
 from pyproj import Transformer
 from scipy.optimize import Bounds, LinearConstraint, minimize, minimize_scalar
 
+from .convert import geod, relative_to_geographic
+
 LLA_TO_ECEF = Transformer.from_crs("EPSG:4979", "EPSG:4978", always_xy=True)
 ECEF_TO_LLA = Transformer.from_crs("EPSG:4978", "EPSG:4979", always_xy=True)
 
@@ -58,6 +60,21 @@ def enu_to_ecef_matrix(lat: ArrayLike, lon: ArrayLike) -> FloatArray:
     return R
 
 
+def _geodesic_to_ecef(
+    sta_lon: FloatArray,
+    sta_lat: FloatArray,
+    relative_km: FloatArray,
+    lla_to_ecef: Transformer,
+) -> FloatArray:
+    """Map surface geodesic E/N coordinates and ellipsoidal depth to ECEF."""
+    lon, lat = relative_to_geographic(
+        relative_km[:, 0], relative_km[:, 1], sta_lon, sta_lat,
+    )
+    return np.stack(
+        lla_to_ecef.transform(lon, lat, -1000.0 * relative_km[:, 2]), axis=-1,
+    )
+
+
 def relative_to_ecef(
     sta_lat: ArrayLike,
     sta_lon: ArrayLike,
@@ -67,14 +84,15 @@ def relative_to_ecef(
     sigma_km2: ArrayLike,
     lla_to_ecef: Transformer = LLA_TO_ECEF,
 ) -> tuple[FloatArray, FloatArray]:
-    """Convert local relative END coordinates to ECEF coordinates.
+    """Map geodesic E/N offsets and depth to ECEF with linearized covariance.
 
     Parameters
     ----------
     sta_lat, sta_lon : ArrayLike
         Station latitude and longitude in degrees.
     east_km, north_km, depth_km : ArrayLike
-        Local relative offsets in kilometers, with depth positive downward.
+        Surface geodesic E/N coordinates and depth in kilometers. Depth is
+        positive downward from the WGS84 ellipsoid.
     sigma_km2 : ArrayLike
         Local END covariance matrix or stack of matrices in square kilometers.
     lla_to_ecef : Transformer, default=LLA_TO_ECEF
@@ -109,19 +127,18 @@ def relative_to_ecef(
             f"sigma_km2.shape[0]={sigma_km2.shape[0]} does not match N={N}"
         )
 
-    # ----- station LLA -> ECEF -----
-    h0 = np.zeros_like(sta_lon, dtype=np.float64)
-    X, Y, Z = lla_to_ecef.transform(sta_lon, sta_lat, h0)
-    sta_ecef = np.stack([X, Y, Z], axis=-1)  # (N, 3)
-
-    R = enu_to_ecef_matrix(sta_lat, sta_lon)  # (N, 3, 3)
-
-    scale = np.array([1000.0, 1000.0, -1000.0], dtype=np.float64)
-    T = R * scale[None, None, :]  # (N, 3, 3)
-
-    enu_km = np.stack([east_km, north_km, depth_km], axis=-1)  # (N, 3)
-    d_ecef = np.einsum("nij,nj->ni", T, enu_km, optimize=True)  # (N, 3)
-    src_ecef = sta_ecef + d_ecef  # (N, 3)
+    relative_km = np.stack([east_km, north_km, depth_km], axis=-1)
+    src_ecef = _geodesic_to_ecef(sta_lon, sta_lat, relative_km, lla_to_ecef)
+    # Central differences over 1 m; derivatives have units of ECEF m / input km.
+    step_km = 1e-3
+    T = np.empty((N, 3, 3), dtype=np.float64)
+    for axis in range(3):
+        delta = np.zeros(3)
+        delta[axis] = step_km
+        T[:, :, axis] = (
+            _geodesic_to_ecef(sta_lon, sta_lat, relative_km + delta, lla_to_ecef)
+            - _geodesic_to_ecef(sta_lon, sta_lat, relative_km - delta, lla_to_ecef)
+        ) / (2 * step_km)
 
     sigma_km2 = 0.5 * (sigma_km2 + np.swapaxes(sigma_km2, -1, -2))
     sigma_ecef = np.einsum(
@@ -137,7 +154,10 @@ def ecef_to_geo_and_sigma(
     sigma_ecef: ArrayLike,
     ecef_to_lla: Transformer = ECEF_TO_LLA,
 ) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
-    """Convert ECEF coordinates and covariance to geodetic END values.
+    """Return coordinates and covariance in epicenter-centered surface E/N/depth.
+
+    Covariance uses a first-order transform, with horizontal distances measured
+    on the ellipsoid to match the geodesic coordinates used for map ellipses.
 
     Parameters
     ----------
@@ -180,8 +200,16 @@ def ecef_to_geo_and_sigma(
         "nij,njk,nkl->nil", R_T, sigma_ecef, R_src, optimize=True
     )  # (N, 3, 3)
 
-    S_km = np.array([1e-3, 1e-3, -1e-3], dtype=np.float64)
-    Sigma_END_km2 = Sigma_enu_m2 * S_km[None, :, None] * S_km[None, None, :]
+    # Tangent distances at source height differ from distances on the ellipsoid.
+    curvature = 1.0 - geod.es * np.sin(np.deg2rad(lat_src)) ** 2
+    prime_vertical_m = geod.a / np.sqrt(curvature)
+    meridional_m = geod.a * (1.0 - geod.es) / curvature**1.5
+    S_km = np.column_stack((
+        1e-3 * prime_vertical_m / (prime_vertical_m + h_src_m),
+        1e-3 * meridional_m / (meridional_m + h_src_m),
+        np.full(N, -1e-3),
+    ))
+    Sigma_END_km2 = Sigma_enu_m2 * S_km[:, :, None] * S_km[:, None, :]
     Sigma_END_km2 = 0.5 * (Sigma_END_km2 + np.swapaxes(Sigma_END_km2, -1, -2))
 
     return lat_src, lon_src, depth_src_km, Sigma_END_km2

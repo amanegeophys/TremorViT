@@ -11,6 +11,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
+from threading import Event
 from typing import Any, TypedDict
 
 import numpy as np
@@ -28,6 +29,7 @@ from my_module.models import (
     load_cnn_detector,
     load_vit_locator_weights,
 )
+from my_module.output_utils import check_output_paths
 from my_module.prediction import convert_arrival_time, convert_relative_to_geo, infer
 from my_module.process import (
     SpectrogramGenerator,
@@ -239,6 +241,7 @@ def process_predict(
     logger: logging.Logger,
     n_producers: int = 8,
     write_batch_rows: int = 10_000,
+    overwrite: bool = False,
 ) -> None:
     """Run threaded detector and locator inference and write predictions.
 
@@ -278,6 +281,8 @@ def process_predict(
         Number of producer threads.
     write_batch_rows : int, default=10000
         Number of rows buffered before writing.
+    overwrite : bool, default=False
+        Whether an existing prediction CSV may be replaced.
     """
     n_producers = max(1, min(n_producers, len(time_station_list) or 1))
     chunks = np.array_split(time_station_list, n_producers)
@@ -285,135 +290,145 @@ def process_predict(
         maxsize=4096
     )
     stop_item = object()
+    stop_event = Event()
 
     total_tasks = len(time_station_list)
-    pbar = tqdm(total=total_tasks, desc="Processing stations", ncols=100)
 
     det_device = next(detector_model.parameters()).device
     detector_model.eval()
 
     def producer_chunk(chunk: list[tuple[datetime, str]]) -> None:
         """Produce queued model inputs for a subset of station-hour tasks."""
-        for start_time, station in chunk:
-            try:
-                station_loc = station_catalog_dict[station]
-                fetch_spectrogram_and_waveform(
-                    sac_handler=sac_handler,
-                    spec_generator=spec_generator,
-                    freqmin_for_detector=freqmin,
-                    freqmax_for_detector=freqmax,
-                    components=input_components,
-                    normalization_type=normalization_type,
-                    prediction_queue=prediction_queue,
-                    start_time=start_time,
-                    station=station,
-                    station_loc=station_loc,
-                )
-            except Exception as e:
-                logger.exception(f"[producer] {station} {start_time}: {e}")
-            finally:
-                pbar.update(1)
-        prediction_queue.put(stop_item)
+        try:
+            for start_time, station in chunk:
+                if stop_event.is_set():
+                    break
+                try:
+                    station_loc = station_catalog_dict[station]
+                    fetch_spectrogram_and_waveform(
+                        sac_handler=sac_handler,
+                        spec_generator=spec_generator,
+                        freqmin_for_detector=freqmin,
+                        freqmax_for_detector=freqmax,
+                        components=input_components,
+                        normalization_type=normalization_type,
+                        prediction_queue=prediction_queue,
+                        start_time=start_time,
+                        station=station,
+                        station_loc=station_loc,
+                    )
+                except Exception as e:
+                    logger.exception(f"[producer] {station} {start_time}: {e}")
+                finally:
+                    pbar.update(1)
+        finally:
+            prediction_queue.put(stop_item)
 
     with (
+        output_csv_path.open("w" if overwrite else "x", newline="") as csvfile,
+        tqdm(total=total_tasks, desc="Processing stations", ncols=100) as pbar,
         ThreadPoolExecutor(max_workers=n_producers) as exe,
-        open(output_csv_path, "w", newline="") as csvfile,
     ):
         writer = csv.writer(csvfile)
         csv_header = BASE_CSV_HEADER + (ARRIVAL_CSV_HEADER if return_arrival else [])
         writer.writerow(csv_header)
 
-        for ch in chunks:
-            exe.submit(producer_chunk, list(ch))
+        futures = [exe.submit(producer_chunk, list(ch)) for ch in chunks]
 
         out_rows: list[list[str | float]] = []
         flush = writer.writerows
 
-        stops_seen = 0
-        while stops_seen < n_producers:
-            item = prediction_queue.get()
+        try:
+            stops_seen = 0
+            while stops_seen < n_producers:
+                item = prediction_queue.get()
 
-            if item is stop_item:
-                stops_seen += 1
-                continue
+                if item is stop_item:
+                    stops_seen += 1
+                    continue
 
-            item = item
-            station, val_times, specs_np, waves_np, station_loc = item
+                station, val_times, specs_np, waves_np, station_loc = item
 
-            # detector
-            specs_t = torch.from_numpy(specs_np).to(det_device, non_blocking=True)
-            with torch.no_grad():
-                probs = detector_model(specs_t).detach().cpu().numpy()
+                # detector
+                specs_t = torch.from_numpy(specs_np).to(det_device, non_blocking=True)
+                with torch.no_grad():
+                    probs = detector_model(specs_t).detach().cpu().numpy()
 
-            locator_preds = infer(
-                locator_model,
-                waves_np,
-                return_arrival=return_arrival,
-            )
-            hypo_preds = locator_preds["hypo"]
-            arrival_preds = locator_preds["arrival_time"]
-
-            for idx, (tt, proba, pred) in enumerate(zip(val_times, probs, hypo_preds)):
-                sta_lat = float(station_loc["lat"])
-                sta_lon = float(station_loc["lon"])
-
-                pred_hypo, mean_km, Sigma_km2 = convert_relative_to_geo(
-                    prediction=pred,
-                    station_loc=(sta_lat, sta_lon),
-                    scale_km=scale_km,
+                locator_preds = infer(
+                    locator_model,
+                    waves_np,
+                    return_arrival=return_arrival,
                 )
+                hypo_preds = locator_preds["hypo"]
+                arrival_preds = locator_preds["arrival_time"]
 
-                row = [
-                    tt.strftime("%Y-%m-%d-%H:%M:%S.%f"),
-                    f"{pred_hypo[0]:.4f}",
-                    f"{pred_hypo[1]:.3f}",
-                    f"{pred_hypo[2]:.3f}",
-                    f"{mean_km[0]:.6f}",
-                    f"{mean_km[1]:.6f}",
-                    f"{mean_km[2]:.6f}",
-                    f"{Sigma_km2[0, 0]:.6f}",
-                    f"{Sigma_km2[0, 1]:.6f}",
-                    f"{Sigma_km2[0, 2]:.6f}",
-                    f"{Sigma_km2[1, 0]:.6f}",
-                    f"{Sigma_km2[1, 1]:.6f}",
-                    f"{Sigma_km2[1, 2]:.6f}",
-                    f"{Sigma_km2[2, 0]:.6f}",
-                    f"{Sigma_km2[2, 1]:.6f}",
-                    f"{Sigma_km2[2, 2]:.6f}",
-                    f"{proba[1]:.5f}",
-                    f"{proba[0]:.5f}",
-                    f"{proba[2]:.5f}",
-                    station,
-                    station_loc["lat"],
-                    station_loc["lon"],
-                ]
+                for idx, (tt, proba, pred) in enumerate(zip(val_times, probs, hypo_preds)):
+                    sta_lat = float(station_loc["lat"])
+                    sta_lon = float(station_loc["lon"])
 
-                if return_arrival:
-                    if arrival_preds is not None:
-                        pred_arrival_sec, pred_arrival_std = convert_arrival_time(
-                            arrival_preds[idx],
-                            win_sec=win_sec,
-                        )
-                    else:
-                        pred_arrival_sec, pred_arrival_std = np.nan, np.nan
-                    row.extend(
-                        [
-                            f"{pred_arrival_sec:.6f}",
-                            f"{pred_arrival_std:.6f}",
-                        ]
+                    pred_hypo, mean_km, Sigma_km2 = convert_relative_to_geo(
+                        prediction=pred,
+                        station_loc=(sta_lat, sta_lon),
+                        scale_km=scale_km,
                     )
 
-                out_rows.append(row)
+                    row = [
+                        tt.strftime("%Y-%m-%d-%H:%M:%S.%f"),
+                        f"{pred_hypo[0]:.4f}",
+                        f"{pred_hypo[1]:.3f}",
+                        f"{pred_hypo[2]:.3f}",
+                        f"{mean_km[0]:.6f}",
+                        f"{mean_km[1]:.6f}",
+                        f"{mean_km[2]:.6f}",
+                        f"{Sigma_km2[0, 0]:.6f}",
+                        f"{Sigma_km2[0, 1]:.6f}",
+                        f"{Sigma_km2[0, 2]:.6f}",
+                        f"{Sigma_km2[1, 0]:.6f}",
+                        f"{Sigma_km2[1, 1]:.6f}",
+                        f"{Sigma_km2[1, 2]:.6f}",
+                        f"{Sigma_km2[2, 0]:.6f}",
+                        f"{Sigma_km2[2, 1]:.6f}",
+                        f"{Sigma_km2[2, 2]:.6f}",
+                        f"{proba[1]:.5f}",
+                        f"{proba[0]:.5f}",
+                        f"{proba[2]:.5f}",
+                        station,
+                        station_loc["lat"],
+                        station_loc["lon"],
+                    ]
 
-                if len(out_rows) >= write_batch_rows:
-                    flush(out_rows)
-                    out_rows.clear()
+                    if return_arrival:
+                        if arrival_preds is not None:
+                            pred_arrival_sec, pred_arrival_std = convert_arrival_time(
+                                arrival_preds[idx],
+                                win_sec=win_sec,
+                            )
+                        else:
+                            pred_arrival_sec, pred_arrival_std = np.nan, np.nan
+                        row.extend(
+                            [
+                                f"{pred_arrival_sec:.6f}",
+                                f"{pred_arrival_std:.6f}",
+                            ]
+                        )
 
-        if out_rows:
-            flush(out_rows)
-            out_rows.clear()
+                    out_rows.append(row)
 
-    pbar.close()
+                    if len(out_rows) >= write_batch_rows:
+                        flush(out_rows)
+                        out_rows.clear()
+
+            if out_rows:
+                flush(out_rows)
+                out_rows.clear()
+        finally:
+            stop_event.set()
+            # Unblock producers waiting on a full queue before executor shutdown.
+            while any(not future.done() for future in futures):
+                try:
+                    prediction_queue.get(timeout=0.1)
+                except queue.Empty:
+                    pass
 
 
 def parse_args() -> argparse.Namespace:
@@ -456,6 +471,9 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="auto",
         help='Inference device: "auto", "cpu", "cuda", or "cuda:<index>".',
+    )
+    parser.add_argument(
+        "--overwrite", action="store_true", help="Allow replacing an existing prediction CSV."
     )
     return parser.parse_args()
 
@@ -530,6 +548,7 @@ def main() -> None:
     output_csv_path = (
         output_dir / f"{format_output_time(start_dt)}_{format_output_time(end_dt)}.csv"
     )
+    check_output_paths([output_csv_path], overwrite=args.overwrite)
 
     logger = create_logger(log_path)
 
@@ -591,6 +610,7 @@ def main() -> None:
         return_arrival=experiment_cfg.data.arrival_time,
         logger=logger,
         n_producers=args.n_producers,
+        overwrite=args.overwrite,
     )
 
 

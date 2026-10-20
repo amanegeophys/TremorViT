@@ -12,6 +12,7 @@ sys.path.append(str(ROOT / "src"))
 from my_module import create_logger
 from my_module.config import ExperimentConfig
 from my_module.models import build_vit_locator
+from my_module.output_utils import check_output_paths
 from my_module.train import (
     build_dataset,
     build_loader,
@@ -62,6 +63,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--strict", action="store_true", help="Use strict weight loading.")
     parser.add_argument("--compile", action="store_true", help="Use torch.compile after loading.")
+    parser.add_argument(
+        "--overwrite", action="store_true", help="Allow replacing existing training outputs."
+    )
     return parser.parse_args()
 
 
@@ -108,9 +112,15 @@ def main() -> None:
     device = choose_device(args.device)
 
     apply_overrides(cfg, args, device)
-    set_random_seed(cfg.train.seed)
 
     save_dir = Path(cfg.output.save_dir)
+    output_paths = [save_dir / "best_weight.pth", save_dir / "finetune_history.csv"]
+    if not cfg.output.save_best_only:
+        output_paths.extend(
+            save_dir / f"weight_{epoch}.pth" for epoch in range(cfg.train.num_epochs)
+        )
+    check_output_paths(output_paths, overwrite=args.overwrite)
+    set_random_seed(cfg.train.seed)
     save_dir.mkdir(parents=True, exist_ok=True)
     logger = create_logger(save_dir / "finetune.log")
     logger.info(f"Experiment config: {cfg_path}")

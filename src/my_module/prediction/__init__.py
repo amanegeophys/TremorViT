@@ -4,6 +4,7 @@ from .ci import (
     relative_to_ecef,
 )
 from .convert import (
+    covariance_at_epicenter,
     convert_arrival_time,
     convert_relative_to_geo,
 )
@@ -17,6 +18,7 @@ from .utils import (
 )
 
 __all__ = [
+    "covariance_at_epicenter",
     "convert_arrival_time",
     "convert_relative_to_geo",
     "flatten_prediction_row",

@@ -104,19 +104,19 @@ def infer(
 
 
 def compute_ellipse_params(sigma_km2: ArrayLike) -> tuple[float, float, float]:
-    """Compute horizontal confidence ellipse parameters.
+    """Return the horizontal marginal 95% ellipse for map plotting.
 
-    Parameters
-    ----------
-    sigma_km2 : ArrayLike
-        Two-dimensional covariance matrix in square kilometers.
-
-    Returns
-    -------
-    tuple[float, float, float]
-        Major-axis diameter, minor-axis diameter, and azimuth in degrees.
+    Accept a 2x2 (East, North) or 3x3 (East, North, Depth) covariance
+    in epicenter-centered km². Only the horizontal 2x2 block determines this ellipse.
+    Return full major/minor diameters in km and azimuth clockwise from
+    north in degrees. The separate 3-D uncertainty calculation is unchanged.
     """
-    eigval, eigvec = np.linalg.eigh(sigma_km2)
+    covariance = np.asarray(sigma_km2)
+    if covariance.shape not in ((2, 2), (3, 3)):
+        raise ValueError(
+            f"Expected covariance shape (2, 2) or (3, 3), got {covariance.shape}"
+        )
+    eigval, eigvec = np.linalg.eigh(covariance[:2, :2])
     idx = eigval.argsort()[::-1]
     eigval = eigval[idx]
     eigvec = eigvec[:, idx]
